@@ -1,4 +1,4 @@
-import argparse, json, os
+import argparse, json, os, re
 from simple_term_menu import TerminalMenu
 from subprocess import run
 
@@ -139,43 +139,65 @@ def do(args):
     if args.add != None:
         friendlyName = args.add
         ip = coloredInput('Enter the IP: ', 'blue')
+        user = coloredInput('Enter the User: ', 'blue')
         files = [f for f in os.listdir(configs['pem']) if f[-4:] == '.pem']
+        files.sort()
         pem = optionizer(files, f'Choose the pem file for {friendlyName} ')
         # Check if the friendly name has been used already
         if friendlyName in configs['names']:
             if optionizer(['yes', 'no'], 'The friendly name you entered already exists, do you want to overwrite it? ') == 'yes':
-                configs['names'][friendlyName] = f'ssh -i {configs["pem"]}/{pem} ubuntu@{ip}'
-                configs['ips'][ip] = f'ssh -i {configs["pem"]}/{pem} ubuntu@{ip}'
+                configs['names'][friendlyName] = f'ssh -i {configs["pem"]}/{pem} {user}@{ip}'
         else:
-            configs['names'][friendlyName] = f'ssh -i {configs["pem"]}/{pem} ubuntu@{ip}'
-            configs['ips'][ip] = f'ssh -i {configs["pem"]}/{pem} ubuntu@{ip}'
+            configs['names'][friendlyName] = f'ssh -i {configs["pem"]}/{pem} {user}@{ip}'
         with open(__file__.replace('main.py', 'configs.json'), 'w') as configs_file:
             json.dump(configs, configs_file, indent=4)
         if optionizer(['yes', 'no'], f'Do you want to ssh into {friendlyName}?') == 'yes':
             run(configs['names'][friendlyName], shell=True)
-    elif args.ip != None:
-        if args.ip in configs['ips']:
-            run(configs['ips'][args.ip], shell=True)
-        else:
-            coloredPrint('IP not present, to register this IP run sshh -a/--add', 'red')
     elif args.name != None:
         if args.name in configs['names']:
             run(configs['names'][args.name], shell=True)
         else:
             coloredPrint('Friendly name not present, to register this name run sshh -a/--add', 'red')
+    elif args.remove != None:
+        if args.remove in configs['names']:
+            removed = configs['names'].pop(args.remove)
+            coloredPrint(f"Friendly name {args.remove} removed.\nValue: {removed}", "green")
+            with open(__file__.replace('main.py', 'configs.json'), 'w') as configs_file:
+                json.dump(configs, configs_file, indent=4)
+        else:
+            coloredPrint('Friendly name not present, to register this name run sshh -a/--add', 'red')
+    elif args.describe != None:
+        if args.describe in configs['names']:
+            coloredPrint(f"Friendly name: {args.describe}", "blue")
+            coloredPrint(f"User: {configs['names'][args.describe].split()[-1].split('@')[0]}", "blue")
+            coloredPrint(f"IP: {configs['names'][args.describe].split('@')[-1]}", "blue")
+            coloredPrint(f"Pem File: {configs['names'][args.describe].split()[-2].split('/')[-1]}", "blue")
+        else:
+            coloredPrint('Friendly name not present, to register this name run sshh -a/--add', 'red')
+    elif args.search != None:
+        if args.search == ".":
+            for name in configs['names'].keys():
+                print(name)
+        else:
+            for name in configs['names'].keys():
+                if re.match(args.search, name):
+                    print(name)
     else:
         keys = list(configs['names'].keys())
         if len(keys) == 0:
             coloredPrint('No ssh instances configured, exiting...', 'green')
             exit(0)
+        keys.sort()
         choice = optionizer(keys, 'Choose the ssh instance name ')
         run(configs['names'][choice], shell=True)
 
 def main():
     parser = argparse.ArgumentParser(description='An ssh helper when you have too many ssh hosts')
-    parser.add_argument('-i', '--ip', type=str, required=False, help='The IP for the instance')
     parser.add_argument('-n', '--name', type=str, required=False, help='A friendly name for the instance')
-    parser.add_argument('-a', '--add', type=str, required=False, help='Add a new ssh')
+    parser.add_argument('-a', '--add', type=str, required=False, help='Add a new ssh. You can also edit an existing one!')
+    parser.add_argument('-r', '--remove', type=str, required=False, help='Remove an ssh entry using the friendly name')
+    parser.add_argument('-d', '--describe', type=str, required=False, help='Describe an ssh entry using the friendly name')
+    parser.add_argument('-s', '--search', type=str, required=False, help='Lists/searches all friendly names')
     args = parser.parse_args()
     do(args)
 
